@@ -1,0 +1,45 @@
+EduSwap Backend Setup Instructions
+==================================
+
+You're ready to deploy your Firebase backend! Follow these steps:
+
+1. CREATE FIREBASE PROJECT
+   - Go to: https://console.firebase.google.com
+   - Sign in with Google
+   - Click "Add project"
+   - Name it: eduswap-prod (or your choice)
+   - Click "Create project"
+
+2. INSTALL FIREBASE TOOLS (if not done)
+   npm install -g firebase-tools
+   firebase login
+
+3. DEPLOY TO FIREBASE
+   - Navigate to your eduswap folder in terminal
+   - Run: firebase init
+   - Select: Functions, Firestore, Storage
+   - Choose TypeScript
+   - Choose existing project (the one you created)
+   - Select: Yes to install dependencies
+   - Select: Yes to overwrite existing files
+
+4. DEPLOY EVERYTHING
+   firebase deploy --only firestore:rules
+   firebase deploy --only storage
+   firebase deploy --only functions
+
+5. YOUR BACKEND IS LIVE! 🎉
+   Your API endpoints will be at:
+   https://your-region-eduswap-prod.cloudfunctions.net/api
+
+NEXT: Update your frontend to use these new backend URLs!
+
+What you now have:
+✅ User registration & login
+✅ File uploads (notes, PDFs, images)
+✅ Messaging between users
+✅ Admin verification system
+✅ Real-time notifications
+✅ Complete security system
+
+Need help? The backend code is fully documented!
