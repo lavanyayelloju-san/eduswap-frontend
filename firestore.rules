@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    function isVerified() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'verified';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isResourceOwner(resourceId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/resources/$(resourceId)).data.ownerId == request.auth.uid;
+    }
+
+    function isConversationParticipant(conversationId) {
+      return isAuthenticated() &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+
+      // Specific fields validation
+      allow write: if isOwner(userId) &&
+        request.writeFields.size() == 1 &&
+        'lastActive' in request.writeFields;
+    }
+
+    // Resources collection
+    match /resources/{resourceId} {
+      allow read: if true; // Public read access
+      allow create: if isVerified();
+      allow update: if isResourceOwner(resourceId) || isAdmin();
+      allow delete: if isResourceOwner(resourceId) || isAdmin();
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isVerified();
+        allow update: if isOwner(resourceData().userId) || isAdmin();
+        allow delete: if isOwner(resourceData().userId) || isAdmin();
+      }
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isOwner(resourceData().userId);
+      allow create: if isAdmin() || isAuthenticated(); // Allow system functions and user notifications
+      allow update: if isOwner(resourceData().userId) || isAdmin();
+      allow delete: if isOwner(resourceData().userId) || isAdmin();
+    }
+
+    // Conversations collection
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() &&
+        request.auth.uid in resourceData().participantIds;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() &&
+        request.auth.uid in resourceData().participantIds;
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+        allow create: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+        allow update: if isOwner(resourceData().senderId);
+      }
+    }
+
+    // Reports collection
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // OTP collection (functions only - no direct access)
+    match /otps/{otpId} {
+      allow read, write: if false; // Only accessible via Firebase Functions
+    }
+
+    // Announcements collection
+    match /announcements/{announcementId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Health check collection
+    match /health/{documentId} {
+      allow read: if true; // Allow health checks
+      allow write: if false;
+    }
+
+    // Index requirements documentation
+    // The following indexes should be created in Firestore:
+    // - users: username, email, status, createdAt
+    // - resources: ownerId, availability, course, itemType, tags, createdAt
+    // - notifications: userId, read, createdAt
+    // - conversations: participantIds, lastMessageTimestamp
+    // - reports: status, createdAt
+  }
+}

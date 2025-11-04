@@ -1,0 +1,64 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isResourceOwner(resourceId) {
+      return isAuthenticated() &&
+        get(/databases/(default)/documents/resources/$(resourceId)).data.ownerId == request.auth.uid;
+    }
+
+    // Profile pictures - authenticated users can read, owner can write
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // ID cards - strict privacy, only owner and admins
+    match /id-cards/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+      allow delete: if isAdmin();
+    }
+
+    // Resource files - public read, owner/admin write
+    match /resources/{resourceId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isResourceOwner(resourceId) || isAdmin();
+      allow delete: if isResourceOwner(resourceId) || isAdmin();
+    }
+
+    // Temporary uploads - owner only, short-lived
+    match /temp-uploads/{uploadId}/{allPaths=**} {
+      allow read, write, delete: if isAuthenticated();
+    }
+
+    // Global file constraints
+    match /{allPaths=**} {
+      allow write: if request.resource.size < 50 * 1024 * 1024 && // 50MB max
+                     request.resource.contentType.matches('image/.*|application/.*|text/.*');
+
+      // Additional validation for image files
+      allow write: if request.resource.contentType.matches('image/.*') &&
+                     request.resource.size < 20 * 1024 * 1024; // 20MB for images
+
+      // Additional validation for document files
+      allow write: if request.resource.contentType.matches('application/.*') &&
+                     request.resource.size < 50 * 1024 * 1024; // 50MB for documents
+    }
+  }
+}
